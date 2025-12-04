@@ -10,6 +10,8 @@ import Discovery from "./pages/Discovery";
 import Campaigns from "./pages/Campaigns";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Templates from "./pages/Templates";
+import PhoneOutreach from "./pages/PhoneOutreach";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
           <Route path="/dashboard/campaigns" element={<Campaigns />} />
           <Route path="/dashboard/analytics" element={<Analytics />} />
           <Route path="/dashboard/settings" element={<Settings />} />
+          <Route path="/dashboard/templates" element={<Templates />} />
+          <Route path="/dashboard/phone" element={<PhoneOutreach />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
