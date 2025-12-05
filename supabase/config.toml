@@ -1,1 +1,7 @@
 project_id = "ssiipdbonvqnaafwvpai"
+
+[functions.discover-businesses]
+verify_jwt = true
+
+[functions.send-outreach]
+verify_jwt = true
