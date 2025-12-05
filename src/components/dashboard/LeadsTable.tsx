@@ -9,105 +9,63 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, ExternalLink, Mail, Phone } from "lucide-react";
+import { MoreHorizontal, Mail, Phone } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useLeads } from "@/hooks/useLeads";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Database } from "@/integrations/supabase/types";
 
-interface Lead {
-  id: string;
-  businessName: string;
-  category: string;
-  city: string;
-  state: string;
-  email: string | null;
-  phone: string | null;
-  websiteStatus: "none" | "broken" | "outdated";
-  score: number;
-  status: "new" | "contacted" | "responded" | "converted" | "unsubscribed";
-}
+type LeadStatus = Database["public"]["Enums"]["lead_status"];
+type WebsiteStatus = Database["public"]["Enums"]["website_status"];
 
-const mockLeads: Lead[] = [
-  {
-    id: "1",
-    businessName: "Joe's Plumbing Services",
-    category: "Plumbing",
-    city: "Austin",
-    state: "TX",
-    email: "joe@example.com",
-    phone: "(512) 555-0123",
-    websiteStatus: "none",
-    score: 92,
-    status: "new",
-  },
-  {
-    id: "2",
-    businessName: "Maria's Mexican Restaurant",
-    category: "Restaurant",
-    city: "Phoenix",
-    state: "AZ",
-    email: "maria@example.com",
-    phone: "(480) 555-0456",
-    websiteStatus: "broken",
-    score: 85,
-    status: "contacted",
-  },
-  {
-    id: "3",
-    businessName: "Smith Auto Repair",
-    category: "Auto Repair",
-    city: "Denver",
-    state: "CO",
-    email: null,
-    phone: "(303) 555-0789",
-    websiteStatus: "outdated",
-    score: 78,
-    status: "new",
-  },
-  {
-    id: "4",
-    businessName: "Green Thumb Landscaping",
-    category: "Landscaping",
-    city: "Seattle",
-    state: "WA",
-    email: "info@greenthumb.com",
-    phone: "(206) 555-0321",
-    websiteStatus: "none",
-    score: 95,
-    status: "responded",
-  },
-  {
-    id: "5",
-    businessName: "Family Dental Care",
-    category: "Dentist",
-    city: "Miami",
-    state: "FL",
-    email: "contact@familydental.com",
-    phone: "(305) 555-0654",
-    websiteStatus: "none",
-    score: 88,
-    status: "converted",
-  },
-];
-
-const statusVariants: Record<Lead["status"], "success" | "info" | "warning" | "muted" | "accent"> = {
+const statusVariants: Record<LeadStatus, "success" | "info" | "warning" | "muted" | "accent"> = {
   new: "info",
   contacted: "warning",
-  responded: "accent",
+  qualified: "accent",
   converted: "success",
   unsubscribed: "muted",
 };
 
-const websiteStatusLabels: Record<Lead["websiteStatus"], string> = {
+const websiteStatusLabels: Record<WebsiteStatus, string> = {
   none: "No Website",
   broken: "Broken",
   outdated: "Outdated",
 };
 
 export function LeadsTable() {
+  const { leads, isLoading, updateLead, deleteLead } = useLeads();
+
+  if (isLoading) {
+    return (
+      <div className="p-4 space-y-4">
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (leads.length === 0) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <p>No leads found. Start a discovery to find businesses!</p>
+      </div>
+    );
+  }
+
+  const handleStatusUpdate = (id: string, status: LeadStatus) => {
+    updateLead.mutate({ id, status });
+  };
+
+  const handleDelete = (id: string) => {
+    deleteLead.mutate(id);
+  };
+
   return (
     <div className="rounded-xl border bg-card">
       <Table>
@@ -126,14 +84,14 @@ export function LeadsTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {mockLeads.map((lead) => (
+          {leads.map((lead) => (
             <TableRow key={lead.id}>
               <TableCell>
                 <Checkbox />
               </TableCell>
               <TableCell>
                 <div>
-                  <p className="font-medium text-foreground">{lead.businessName}</p>
+                  <p className="font-medium text-foreground">{lead.business_name}</p>
                   <p className="text-sm text-muted-foreground">{lead.category}</p>
                 </div>
               </TableCell>
@@ -144,10 +102,10 @@ export function LeadsTable() {
               </TableCell>
               <TableCell>
                 <Badge 
-                  variant={lead.websiteStatus === "none" ? "destructive" : "warning"}
+                  variant={lead.website_status === "none" ? "destructive" : "warning"}
                   className="font-normal"
                 >
-                  {websiteStatusLabels[lead.websiteStatus]}
+                  {websiteStatusLabels[lead.website_status]}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -169,10 +127,10 @@ export function LeadsTable() {
                   <div className="w-12 h-2 rounded-full bg-muted overflow-hidden">
                     <div 
                       className="h-full rounded-full gradient-primary"
-                      style={{ width: `${lead.score}%` }}
+                      style={{ width: `${lead.score || 0}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-foreground">{lead.score}</span>
+                  <span className="text-sm font-medium text-foreground">{lead.score || 0}</span>
                 </div>
               </TableCell>
               <TableCell>
@@ -190,8 +148,15 @@ export function LeadsTable() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem>View Details</DropdownMenuItem>
                     <DropdownMenuItem>Send Email</DropdownMenuItem>
-                    <DropdownMenuItem>Mark as Contacted</DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive">Remove Lead</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleStatusUpdate(lead.id, "contacted")}>
+                      Mark as Contacted
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={() => handleDelete(lead.id)}
+                    >
+                      Remove Lead
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
