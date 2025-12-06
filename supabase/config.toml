@@ -5,3 +5,12 @@ verify_jwt = true
 
 [functions.send-outreach]
 verify_jwt = true
+
+[functions.send-campaign-email]
+verify_jwt = true
+
+[functions.handle-unsubscribe]
+verify_jwt = false
+
+[functions.scheduled-discovery]
+verify_jwt = false

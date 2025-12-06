@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -22,10 +23,14 @@ import {
   RotateCw,
   CheckCircle,
   Clock,
+  Trash2,
+  Calendar,
+  Zap,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
+import { useDiscoveryJobs } from "@/hooks/useDiscoveryJobs";
 import { toast } from "sonner";
 
 const categories = [
@@ -38,7 +43,12 @@ const categories = [
   "Real Estate",
   "Salons & Spas",
   "Contractors",
-  "Cleaning Services"
+  "Cleaning Services",
+  "HVAC",
+  "Electricians",
+  "Roofing",
+  "Pet Services",
+  "Fitness",
 ];
 
 const US_STATES = [
@@ -100,20 +110,16 @@ const Discovery = () => {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isRecurring, setIsRecurring] = useState(false);
   const [discoveryStats, setDiscoveryStats] = useState({
     found: 0,
     noWebsite: 0,
-    withEmail: 0,
+    withPhone: 0,
     duplicates: 0,
   });
-  const [recentJobs, setRecentJobs] = useState<Array<{
-    city: string;
-    category: string;
-    status: string;
-    leads: number;
-  }>>([]);
 
   const { createLead } = useLeads();
+  const { jobs, createJob, runJob, deleteJob, isLoading: jobsLoading } = useDiscoveryJobs();
 
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories(prev => 
@@ -121,6 +127,14 @@ const Discovery = () => {
         ? prev.filter(c => c !== category)
         : [...prev, category]
     );
+  };
+
+  const selectAllCategories = () => {
+    setSelectedCategories(categories);
+  };
+
+  const clearCategories = () => {
+    setSelectedCategories([]);
   };
 
   const startDiscovery = async () => {
@@ -139,15 +153,6 @@ const Discovery = () => {
 
     try {
       const location = `${city}, ${state}`;
-      
-      // Add to recent jobs
-      setRecentJobs(prev => [{
-        city: location,
-        category: selectedCategories.join(", "),
-        status: "running",
-        leads: 0
-      }, ...prev.slice(0, 3)]);
-
       setProgress(30);
 
       const { data, error } = await supabase.functions.invoke('discover-businesses', {
@@ -165,11 +170,11 @@ const Discovery = () => {
       const businesses = data.businesses || [];
       let savedCount = 0;
       let noWebsiteCount = 0;
+      let withPhoneCount = 0;
 
       for (const business of businesses) {
-        if (business.website_status === 'none') {
-          noWebsiteCount++;
-        }
+        if (business.website_status === 'none') noWebsiteCount++;
+        if (business.phone) withPhoneCount++;
 
         try {
           await createLead.mutateAsync({
@@ -184,7 +189,7 @@ const Discovery = () => {
           });
           savedCount++;
         } catch (e) {
-          console.log("Duplicate or error saving lead:", business.business_name);
+          // Duplicate
         }
       }
 
@@ -193,26 +198,42 @@ const Discovery = () => {
       setDiscoveryStats({
         found: businesses.length,
         noWebsite: noWebsiteCount,
-        withEmail: 0,
+        withPhone: withPhoneCount,
         duplicates: businesses.length - savedCount,
       });
 
-      // Update recent job status
-      setRecentJobs(prev => prev.map((job, i) => 
-        i === 0 ? { ...job, status: "completed", leads: savedCount } : job
-      ));
-
       toast.success(`Discovery complete! Found ${savedCount} new leads`);
+
+      // Schedule recurring job if enabled
+      if (isRecurring) {
+        await createJob.mutateAsync({
+          location,
+          categories: selectedCategories,
+          is_recurring: true,
+        });
+        toast.success("Daily recurring job scheduled");
+      }
     } catch (error: any) {
       console.error("Discovery error:", error);
       toast.error(error.message || "Discovery failed");
-      
-      setRecentJobs(prev => prev.map((job, i) => 
-        i === 0 ? { ...job, status: "failed", leads: 0 } : job
-      ));
     } finally {
       setIsRunning(false);
       setTimeout(() => setProgress(0), 2000);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <Badge variant="success"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
+      case "running":
+        return <Badge variant="info"><RotateCw className="w-3 h-3 mr-1 animate-spin" />Running</Badge>;
+      case "pending":
+        return <Badge variant="muted"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+      case "failed":
+        return <Badge variant="destructive">Failed</Badge>;
+      default:
+        return <Badge variant="muted">{status}</Badge>;
     }
   };
 
@@ -222,16 +243,16 @@ const Discovery = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Discovery</h1>
+            <h1 className="text-3xl font-bold text-foreground">Business Discovery</h1>
             <p className="text-muted-foreground mt-1">
-              Discover businesses without websites using Yelp
+              Find US businesses without websites using Yelp API
             </p>
           </div>
           <div className="flex items-center gap-3">
             {isRunning && (
               <Button variant="outline" onClick={() => setIsRunning(false)}>
                 <Pause className="w-4 h-4 mr-2" />
-                Pause
+                Stop
               </Button>
             )}
             <Button 
@@ -239,8 +260,8 @@ const Discovery = () => {
               onClick={startDiscovery}
               disabled={isRunning}
             >
-              <Play className="w-4 h-4 mr-2" />
-              {isRunning ? "Running..." : "Start Discovery"}
+              <Zap className="w-4 h-4 mr-2" />
+              {isRunning ? "Discovering..." : "Start Discovery"}
             </Button>
           </div>
         </div>
@@ -257,7 +278,7 @@ const Discovery = () => {
                   <div>
                     <p className="font-semibold text-foreground">Discovery Running</p>
                     <p className="text-sm text-muted-foreground">
-                      Scanning {city}, {state} - {selectedCategories.join(", ")}
+                      Scanning {city}, {state} for {selectedCategories.length} categories
                     </p>
                   </div>
                 </div>
@@ -266,7 +287,7 @@ const Discovery = () => {
               <Progress value={progress} className="h-2 mb-2" />
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{progress}% complete</span>
-                <span>Processing...</span>
+                <span>Processing Yelp data...</span>
               </div>
             </CardContent>
           </Card>
@@ -283,7 +304,7 @@ const Discovery = () => {
                   Location Settings
                 </CardTitle>
                 <CardDescription>
-                  Define the geographic areas to search for businesses
+                  Target specific US cities to find businesses without websites
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -291,7 +312,7 @@ const Discovery = () => {
                   <div className="space-y-2">
                     <Label>City</Label>
                     <Input 
-                      placeholder="e.g., Austin" 
+                      placeholder="e.g., Austin, Miami, Seattle" 
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                     />
@@ -312,26 +333,55 @@ const Discovery = () => {
                     </Select>
                   </div>
                 </div>
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-sm">Daily Automatic Scanning</p>
+                      <p className="text-xs text-muted-foreground">Run this search automatically every day</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={isRecurring}
+                    onCheckedChange={setIsRecurring}
+                  />
+                </div>
               </CardContent>
             </Card>
 
             {/* Category Selection */}
             <Card variant="elevated">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-primary" />
-                  Business Categories
-                </CardTitle>
-                <CardDescription>
-                  Select which types of businesses to discover
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-primary" />
+                      Business Categories
+                    </CardTitle>
+                    <CardDescription>
+                      Select business types to discover ({selectedCategories.length} selected)
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={selectAllCategories}>
+                      Select All
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={clearCategories}>
+                      Clear
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {categories.map((category) => (
                     <label
                       key={category}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-colors"
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                        selectedCategories.includes(category) 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/30"
+                      }`}
                     >
                       <Checkbox 
                         checked={selectedCategories.includes(category)}
@@ -344,24 +394,36 @@ const Discovery = () => {
               </CardContent>
             </Card>
 
-            {/* Data Sources */}
+            {/* Data Source */}
             <Card variant="elevated">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Search className="w-5 h-5 text-primary" />
-                  Data Source
+                  Data Sources
                 </CardTitle>
                 <CardDescription>
-                  Business discovery powered by Yelp Fusion API
+                  Business data powered by Yelp Fusion API
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <div className="flex items-center justify-between p-4 rounded-lg border border-primary/30 bg-primary/5">
                   <div className="flex items-center gap-3">
                     <CheckCircle className="w-5 h-5 text-primary" />
-                    <span className="font-medium">Yelp Fusion API</span>
+                    <div>
+                      <span className="font-medium">Yelp Fusion API</span>
+                      <p className="text-xs text-muted-foreground">Primary business directory</p>
+                    </div>
                   </div>
                   <Badge variant="success">Connected</Badge>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+                  <p><strong>Automatic filters applied:</strong></p>
+                  <ul className="mt-2 space-y-1 list-disc list-inside">
+                    <li>USA businesses only</li>
+                    <li>No website or Yelp-only URL</li>
+                    <li>Deduplication by business name + city</li>
+                    <li>Lead scoring (no website = 85 points)</li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
@@ -372,73 +434,78 @@ const Discovery = () => {
             {/* Quick Stats */}
             <Card variant="stat">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Latest Discovery</CardTitle>
+                <CardTitle className="text-base">Latest Discovery Results</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Businesses Found</span>
-                  <span className="font-semibold">{discoveryStats.found}</span>
+                  <span className="font-semibold text-lg">{discoveryStats.found}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">No Website</span>
-                  <span className="font-semibold text-destructive">{discoveryStats.noWebsite}</span>
+                  <span className="font-semibold text-lg text-destructive">{discoveryStats.noWebsite}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">With Email</span>
-                  <span className="font-semibold text-success">{discoveryStats.withEmail}</span>
+                  <span className="text-muted-foreground">With Phone</span>
+                  <span className="font-semibold text-lg text-success">{discoveryStats.withPhone}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Duplicates Filtered</span>
-                  <span className="font-semibold">{discoveryStats.duplicates}</span>
+                  <span className="font-semibold text-lg">{discoveryStats.duplicates}</span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Recent Jobs */}
+            {/* Scheduled Jobs */}
             <Card variant="elevated">
-              <CardHeader>
-                <CardTitle className="text-base">Recent Jobs</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Scheduled Jobs</CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => runJob.mutate()}
+                  disabled={runJob.isPending}
+                >
+                  <Play className="w-3 h-3 mr-1" />
+                  Run Now
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
-                {recentJobs.length === 0 ? (
+                {jobsLoading ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+                ) : jobs.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No discovery jobs yet. Start your first discovery above.
+                    No scheduled jobs. Enable "Daily Automatic Scanning" above.
                   </p>
                 ) : (
-                  recentJobs.map((job, i) => (
+                  jobs.slice(0, 5).map((job) => (
                     <div 
-                      key={i}
+                      key={job.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
-                      <div>
-                        <p className="font-medium text-sm">{job.city}</p>
-                        <p className="text-xs text-muted-foreground">{job.category}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{job.location}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {job.categories.slice(0, 2).join(", ")}
+                          {job.categories.length > 2 && ` +${job.categories.length - 2}`}
+                        </p>
                       </div>
-                      <div className="text-right">
-                        {job.status === "completed" && (
-                          <Badge variant="success" className="mb-1">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Done
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(job.status)}
+                        {job.is_recurring && (
+                          <Badge variant="info" className="text-xs">
+                            <RotateCw className="w-2 h-2 mr-1" />
+                            Daily
                           </Badge>
                         )}
-                        {job.status === "running" && (
-                          <Badge variant="info" className="mb-1">
-                            <RotateCw className="w-3 h-3 mr-1 animate-spin" />
-                            Running
-                          </Badge>
-                        )}
-                        {job.status === "pending" && (
-                          <Badge variant="muted" className="mb-1">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Pending
-                          </Badge>
-                        )}
-                        {job.status === "failed" && (
-                          <Badge variant="destructive" className="mb-1">
-                            Failed
-                          </Badge>
-                        )}
-                        <p className="text-xs text-muted-foreground">{job.leads} leads</p>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => deleteJob.mutate(job.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     </div>
                   ))
