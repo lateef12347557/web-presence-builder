@@ -105,6 +105,145 @@ export type Database = {
           },
         ]
       }
+      daily_send_limits: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          id: string
+          last_reset_date: string
+          sent_today: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          last_reset_date?: string
+          sent_today?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          last_reset_date?: string
+          sent_today?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      discovery_jobs: {
+        Row: {
+          categories: string[]
+          created_at: string
+          id: string
+          is_recurring: boolean | null
+          last_run_at: string | null
+          leads_found: number | null
+          leads_saved: number | null
+          location: string
+          next_run_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          categories: string[]
+          created_at?: string
+          id?: string
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          leads_found?: number | null
+          leads_saved?: number | null
+          location: string
+          next_run_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          categories?: string[]
+          created_at?: string
+          id?: string
+          is_recurring?: boolean | null
+          last_run_at?: string | null
+          leads_found?: number | null
+          leads_saved?: number | null
+          location?: string
+          next_run_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_logs: {
+        Row: {
+          bounced_at: string | null
+          campaign_id: string | null
+          clicked_at: string | null
+          created_at: string
+          id: string
+          lead_id: string | null
+          opened_at: string | null
+          replied_at: string | null
+          status: string
+          subject: string
+          template_id: string | null
+          to_email: string
+          user_id: string
+        }
+        Insert: {
+          bounced_at?: string | null
+          campaign_id?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          opened_at?: string | null
+          replied_at?: string | null
+          status?: string
+          subject: string
+          template_id?: string | null
+          to_email: string
+          user_id: string
+        }
+        Update: {
+          bounced_at?: string | null
+          campaign_id?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          opened_at?: string | null
+          replied_at?: string | null
+          status?: string
+          subject?: string
+          template_id?: string | null
+          to_email?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           business_name: string
@@ -228,6 +367,27 @@ export type Database = {
           updated_at?: string
           usage_count?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      unsubscribes: {
+        Row: {
+          email: string
+          id: string
+          reason: string | null
+          unsubscribed_at: string
+        }
+        Insert: {
+          email: string
+          id?: string
+          reason?: string | null
+          unsubscribed_at?: string
+        }
+        Update: {
+          email?: string
+          id?: string
+          reason?: string | null
+          unsubscribed_at?: string
         }
         Relationships: []
       }
