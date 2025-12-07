@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -9,19 +10,23 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Mail, Phone } from "lucide-react";
+import { MoreHorizontal, Mail, Phone, Zap, ExternalLink } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLeads } from "@/hooks/useLeads";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LeadScoreBadge } from "./LeadScoreBadge";
+import { WebsiteStatusBadge } from "./WebsiteStatusBadge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type LeadStatus = Database["public"]["Enums"]["lead_status"];
-type WebsiteStatus = Database["public"]["Enums"]["website_status"];
 
 const statusVariants: Record<LeadStatus, "success" | "info" | "warning" | "muted" | "accent"> = {
   new: "info",
@@ -31,14 +36,97 @@ const statusVariants: Record<LeadStatus, "success" | "info" | "warning" | "muted
   unsubscribed: "muted",
 };
 
-const websiteStatusLabels: Record<WebsiteStatus, string> = {
-  none: "No Website",
-  broken: "Broken",
-  outdated: "Outdated",
-};
+interface LeadsTableProps {
+  selectedLeads?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  filters?: {
+    search?: string;
+    state?: string;
+    category?: string;
+    websiteStatus?: string;
+    leadStatus?: string;
+    tier?: string;
+  };
+}
 
-export function LeadsTable() {
+export function LeadsTable({ selectedLeads = [], onSelectionChange, filters }: LeadsTableProps) {
   const { leads, isLoading, updateLead, deleteLead } = useLeads();
+  const { toast } = useToast();
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+
+  // Apply filters
+  const filteredLeads = leads.filter((lead) => {
+    if (filters?.search) {
+      const search = filters.search.toLowerCase();
+      if (
+        !lead.business_name.toLowerCase().includes(search) &&
+        !lead.category.toLowerCase().includes(search) &&
+        !lead.city.toLowerCase().includes(search)
+      ) {
+        return false;
+      }
+    }
+    if (filters?.state && filters.state !== "all" && lead.state !== filters.state) {
+      return false;
+    }
+    if (filters?.category && filters.category !== "all" && lead.category !== filters.category) {
+      return false;
+    }
+    if (filters?.websiteStatus && filters.websiteStatus !== "all" && lead.website_status !== filters.websiteStatus) {
+      return false;
+    }
+    if (filters?.leadStatus && filters.leadStatus !== "all" && lead.status !== filters.leadStatus) {
+      return false;
+    }
+    if (filters?.tier && filters.tier !== "all") {
+      const leadTier = (lead as any).lead_tier || 
+        (lead.score && lead.score >= 70 ? "hot" : lead.score && lead.score >= 40 ? "warm" : "cold");
+      if (leadTier !== filters.tier) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      onSelectionChange?.(filteredLeads.map((lead) => lead.id));
+    } else {
+      onSelectionChange?.([]);
+    }
+  };
+
+  const handleSelectLead = (id: string, checked: boolean) => {
+    if (checked) {
+      onSelectionChange?.([...selectedLeads, id]);
+    } else {
+      onSelectionChange?.(selectedLeads.filter((leadId) => leadId !== id));
+    }
+  };
+
+  const handleAnalyze = async (leadId: string) => {
+    setAnalyzingId(leadId);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-website", {
+        body: { lead_id: leadId },
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Analysis complete",
+        description: `Lead score: ${data.score}, Tier: ${data.lead_tier}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Analysis failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -72,22 +160,28 @@ export function LeadsTable() {
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">
-              <Checkbox />
+              <Checkbox 
+                checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
             </TableHead>
             <TableHead>Business</TableHead>
             <TableHead>Location</TableHead>
             <TableHead>Website Status</TableHead>
             <TableHead>Contact</TableHead>
-            <TableHead>Score</TableHead>
+            <TableHead>Lead Score</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {leads.map((lead) => (
-            <TableRow key={lead.id}>
+          {filteredLeads.map((lead) => (
+            <TableRow key={lead.id} className={selectedLeads.includes(lead.id) ? "bg-muted/50" : ""}>
               <TableCell>
-                <Checkbox />
+                <Checkbox 
+                  checked={selectedLeads.includes(lead.id)}
+                  onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
+                />
               </TableCell>
               <TableCell>
                 <div>
@@ -101,37 +195,44 @@ export function LeadsTable() {
                 </span>
               </TableCell>
               <TableCell>
-                <Badge 
-                  variant={lead.website_status === "none" ? "destructive" : "warning"}
-                  className="font-normal"
-                >
-                  {websiteStatusLabels[lead.website_status]}
-                </Badge>
+                <WebsiteStatusBadge 
+                  status={lead.website_status}
+                  hasSSL={(lead as any).has_ssl}
+                  isMobileFriendly={(lead as any).is_mobile_friendly}
+                />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   {lead.email && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      title={lead.email}
+                    >
                       <Mail className="w-4 h-4" />
                     </Button>
                   )}
                   {lead.phone && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      title={lead.phone}
+                    >
                       <Phone className="w-4 h-4" />
                     </Button>
+                  )}
+                  {!lead.email && !lead.phone && (
+                    <span className="text-sm text-muted-foreground">No contact</span>
                   )}
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <div className="w-12 h-2 rounded-full bg-muted overflow-hidden">
-                    <div 
-                      className="h-full rounded-full gradient-primary"
-                      style={{ width: `${lead.score || 0}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-foreground">{lead.score || 0}</span>
-                </div>
+                <LeadScoreBadge 
+                  score={lead.score} 
+                  tier={(lead as any).lead_tier}
+                />
               </TableCell>
               <TableCell>
                 <Badge variant={statusVariants[lead.status]}>
@@ -146,11 +247,34 @@ export function LeadsTable() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>View Details</DropdownMenuItem>
-                    <DropdownMenuItem>Send Email</DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleAnalyze(lead.id)}
+                      disabled={analyzingId === lead.id}
+                    >
+                      <Zap className="w-4 h-4 mr-2" />
+                      {analyzingId === lead.id ? "Analyzing..." : "Analyze & Score"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {lead.email && (
+                      <DropdownMenuItem>
+                        <Mail className="w-4 h-4 mr-2" />
+                        Send Email
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => handleStatusUpdate(lead.id, "contacted")}>
                       Mark as Contacted
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleStatusUpdate(lead.id, "qualified")}>
+                      Mark as Qualified
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleStatusUpdate(lead.id, "converted")}>
+                      Mark as Converted
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       className="text-destructive"
                       onClick={() => handleDelete(lead.id)}

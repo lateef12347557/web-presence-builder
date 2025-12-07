@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.scheduled-discovery]
 verify_jwt = false
+
+[functions.analyze-website]
+verify_jwt = true
+
+[functions.send-sequence-emails]
+verify_jwt = false

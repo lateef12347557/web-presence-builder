@@ -244,6 +244,60 @@ export type Database = {
           },
         ]
       }
+      email_sequences: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          id: string
+          lead_id: string
+          scheduled_at: string
+          sent_at: string | null
+          sequence_step: number
+          status: string
+          template_type: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id: string
+          scheduled_at: string
+          sent_at?: string | null
+          sequence_step?: number
+          status?: string
+          template_type: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          sequence_step?: number
+          status?: string
+          template_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sequences_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sequences_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           business_name: string
@@ -251,15 +305,23 @@ export type Database = {
           city: string
           created_at: string
           email: string | null
+          google_rating: number | null
+          has_social_presence: boolean | null
+          has_ssl: boolean | null
           id: string
+          is_mobile_friendly: boolean | null
+          last_analyzed_at: string | null
+          lead_tier: string | null
           notes: string | null
           phone: string | null
+          review_count: number | null
           score: number | null
           source: string | null
           state: string
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
           user_id: string
+          website_speed_score: number | null
           website_status: Database["public"]["Enums"]["website_status"]
         }
         Insert: {
@@ -268,15 +330,23 @@ export type Database = {
           city: string
           created_at?: string
           email?: string | null
+          google_rating?: number | null
+          has_social_presence?: boolean | null
+          has_ssl?: boolean | null
           id?: string
+          is_mobile_friendly?: boolean | null
+          last_analyzed_at?: string | null
+          lead_tier?: string | null
           notes?: string | null
           phone?: string | null
+          review_count?: number | null
           score?: number | null
           source?: string | null
           state: string
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
           user_id: string
+          website_speed_score?: number | null
           website_status?: Database["public"]["Enums"]["website_status"]
         }
         Update: {
@@ -285,15 +355,23 @@ export type Database = {
           city?: string
           created_at?: string
           email?: string | null
+          google_rating?: number | null
+          has_social_presence?: boolean | null
+          has_ssl?: boolean | null
           id?: string
+          is_mobile_friendly?: boolean | null
+          last_analyzed_at?: string | null
+          lead_tier?: string | null
           notes?: string | null
           phone?: string | null
+          review_count?: number | null
           score?: number | null
           source?: string | null
           state?: string
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
           user_id?: string
+          website_speed_score?: number | null
           website_status?: Database["public"]["Enums"]["website_status"]
         }
         Relationships: []
@@ -396,7 +474,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_lead_score: {
+        Args: {
+          p_google_rating: number
+          p_has_email: boolean
+          p_has_phone: boolean
+          p_has_social_presence: boolean
+          p_has_ssl: boolean
+          p_is_mobile_friendly: boolean
+          p_review_count: number
+          p_website_speed_score: number
+          p_website_status: Database["public"]["Enums"]["website_status"]
+        }
+        Returns: number
+      }
+      determine_lead_tier: { Args: { p_score: number }; Returns: string }
     }
     Enums: {
       call_outcome:
