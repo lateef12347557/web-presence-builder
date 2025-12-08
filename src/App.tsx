@@ -8,12 +8,14 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
+import LeadDetails from "./pages/LeadDetails";
 import Discovery from "./pages/Discovery";
 import Campaigns from "./pages/Campaigns";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Templates from "./pages/Templates";
 import PhoneOutreach from "./pages/PhoneOutreach";
+import SendEmail from "./pages/SendEmail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,12 +31,14 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+          <Route path="/dashboard/leads/:id" element={<ProtectedRoute><LeadDetails /></ProtectedRoute>} />
           <Route path="/dashboard/discovery" element={<ProtectedRoute><Discovery /></ProtectedRoute>} />
           <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
           <Route path="/dashboard/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
           <Route path="/dashboard/phone" element={<ProtectedRoute><PhoneOutreach /></ProtectedRoute>} />
+          <Route path="/dashboard/send-email" element={<ProtectedRoute><SendEmail /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

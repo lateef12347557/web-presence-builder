@@ -15,10 +15,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
+import { Send } from "lucide-react";
+
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
   { name: "Discovery", href: "/dashboard/discovery", icon: Search },
+  { name: "Send Email", href: "/dashboard/send-email", icon: Send },
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
   { name: "Phone Outreach", href: "/dashboard/phone", icon: Phone },
   { name: "Templates", href: "/dashboard/templates", icon: FileText },
