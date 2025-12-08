@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -10,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Mail, Phone, Zap, ExternalLink } from "lucide-react";
+import { MoreHorizontal, Mail, Phone, Zap, ExternalLink, Eye } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,7 @@ interface LeadsTableProps {
 export function LeadsTable({ selectedLeads = [], onSelectionChange, filters }: LeadsTableProps) {
   const { leads, isLoading, updateLead, deleteLead } = useLeads();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
   // Apply filters
@@ -184,7 +186,10 @@ export function LeadsTable({ selectedLeads = [], onSelectionChange, filters }: L
                 />
               </TableCell>
               <TableCell>
-                <div>
+                <div 
+                  className="cursor-pointer hover:text-primary transition-colors"
+                  onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+                >
                   <p className="font-medium text-foreground">{lead.business_name}</p>
                   <p className="text-sm text-muted-foreground">{lead.category}</p>
                 </div>
@@ -247,8 +252,8 @@ export function LeadsTable({ selectedLeads = [], onSelectionChange, filters }: L
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <ExternalLink className="w-4 h-4 mr-2" />
+                    <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
+                      <Eye className="w-4 h-4 mr-2" />
                       View Details
                     </DropdownMenuItem>
                     <DropdownMenuItem 
@@ -260,9 +265,15 @@ export function LeadsTable({ selectedLeads = [], onSelectionChange, filters }: L
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {lead.email && (
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
                         <Mail className="w-4 h-4 mr-2" />
                         Send Email
+                      </DropdownMenuItem>
+                    )}
+                    {lead.phone && (
+                      <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
+                        <Phone className="w-4 h-4 mr-2" />
+                        Call Lead
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => handleStatusUpdate(lead.id, "contacted")}>
