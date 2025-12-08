@@ -183,6 +183,7 @@ const Discovery = () => {
             city: business.city,
             state: business.state,
             phone: business.phone,
+            email: business.email,
             source: business.source,
             website_status: business.website_status,
             score: business.score,

@@ -28,6 +28,62 @@ interface YelpBusiness {
   categories: Array<{ alias: string; title: string }>;
 }
 
+// Function to extract email from business Yelp page
+async function extractEmailFromYelp(yelpUrl: string): Promise<string | null> {
+  try {
+    const response = await fetch(yelpUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+    
+    if (!response.ok) return null;
+    
+    const html = await response.text();
+    
+    // Look for email patterns in the page
+    const emailPatterns = [
+      /href="mailto:([^"]+)"/gi,
+      /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi,
+    ];
+    
+    for (const pattern of emailPatterns) {
+      const matches = html.match(pattern);
+      if (matches && matches.length > 0) {
+        let email = matches[0];
+        if (email.includes("mailto:")) {
+          email = email.replace(/href="mailto:/i, "").replace(/"$/, "");
+        }
+        // Filter out common non-business emails
+        if (!email.includes("yelp.com") && 
+            !email.includes("example.com") &&
+            !email.includes("@email.com")) {
+          return email.toLowerCase();
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Error extracting email:", error);
+    return null;
+  }
+}
+
+// Generate business email guesses based on common patterns
+function generateEmailGuesses(businessName: string, city: string): string {
+  // Clean business name for email generation
+  const cleanName = businessName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, "")
+    .substring(0, 20);
+  
+  // Common patterns - we'll just generate a likely contact email format
+  // In production, you'd want to verify these
+  const domain = `${cleanName}.com`;
+  return `info@${domain}`;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -83,12 +139,30 @@ const handler = async (req: Request): Promise<Response> => {
         // We'll mark them for further verification
         const hasNoWebsite = !business.url || business.url.includes("yelp.com");
         
+        // Try to extract email from Yelp page or generate a guess
+        let email: string | null = null;
+        
+        // Attempt to extract email from Yelp business page
+        if (business.url && !business.url.includes("yelp.com")) {
+          // If they have their own website, we'll try to find email during analysis
+          email = null;
+        } else if (business.url) {
+          // Try to extract from Yelp page
+          email = await extractEmailFromYelp(business.url);
+        }
+        
+        // If no email found and business has a phone, generate a guess
+        if (!email && business.display_phone) {
+          email = generateEmailGuesses(business.name, business.location?.city || "");
+        }
+        
         discoveredBusinesses.push({
           business_name: business.name,
           category: business.categories?.[0]?.title || category,
           city: business.location?.city || "",
           state: business.location?.state || "",
           phone: business.display_phone || business.phone || null,
+          email: email,
           source: "yelp",
           website_status: hasNoWebsite ? "none" : "outdated",
           score: hasNoWebsite ? 80 : 50,
