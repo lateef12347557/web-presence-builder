@@ -378,29 +378,38 @@ export type Database = {
       }
       profiles: {
         Row: {
+          company_address: string | null
           company_name: string | null
           created_at: string
           email_provider: string | null
           full_name: string | null
           id: string
+          sender_email: string | null
+          sender_name: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          company_address?: string | null
           company_name?: string | null
           created_at?: string
           email_provider?: string | null
           full_name?: string | null
           id?: string
+          sender_email?: string | null
+          sender_name?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          company_address?: string | null
           company_name?: string | null
           created_at?: string
           email_provider?: string | null
           full_name?: string | null
           id?: string
+          sender_email?: string | null
+          sender_name?: string | null
           updated_at?: string
           user_id?: string
         }
