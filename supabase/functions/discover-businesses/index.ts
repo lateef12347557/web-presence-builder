@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,58 +27,95 @@ interface YelpBusiness {
   categories: Array<{ alias: string; title: string }>;
 }
 
-// Function to extract email from business Yelp page
-async function extractEmailFromYelp(yelpUrl: string): Promise<string | null> {
+interface HunterEmailResult {
+  data: {
+    email: string;
+    score: number;
+    domain: string;
+  };
+}
+
+interface HunterDomainResult {
+  data: {
+    emails: Array<{
+      value: string;
+      type: string;
+      confidence: number;
+    }>;
+  };
+}
+
+// Find email using Hunter.io Domain Search API
+async function findEmailWithHunter(businessName: string, domain?: string): Promise<string | null> {
+  const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
+  if (!hunterApiKey) {
+    console.log("Hunter API key not configured");
+    return null;
+  }
+
   try {
-    const response = await fetch(yelpUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
-    
-    if (!response.ok) return null;
-    
-    const html = await response.text();
-    
-    // Look for email patterns in the page
-    const emailPatterns = [
-      /href="mailto:([^"]+)"/gi,
-      /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi,
-    ];
-    
-    for (const pattern of emailPatterns) {
-      const matches = html.match(pattern);
-      if (matches && matches.length > 0) {
-        let email = matches[0];
-        if (email.includes("mailto:")) {
-          email = email.replace(/href="mailto:/i, "").replace(/"$/, "");
-        }
-        // Filter out common non-business emails
-        if (!email.includes("yelp.com") && 
-            !email.includes("example.com") &&
-            !email.includes("@email.com")) {
-          return email.toLowerCase();
+    // If we have a domain, use domain search
+    if (domain) {
+      const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+      
+      const response = await fetch(
+        `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(cleanDomain)}&api_key=${hunterApiKey}`,
+        { headers: { "Accept": "application/json" } }
+      );
+
+      if (response.ok) {
+        const data: HunterDomainResult = await response.json();
+        if (data.data?.emails && data.data.emails.length > 0) {
+          // Get the email with highest confidence, prefer generic emails (info@, contact@, hello@)
+          const genericEmails = data.data.emails.filter(e => 
+            e.value.startsWith("info@") || 
+            e.value.startsWith("contact@") || 
+            e.value.startsWith("hello@") ||
+            e.value.startsWith("sales@")
+          );
+          
+          if (genericEmails.length > 0) {
+            return genericEmails[0].value.toLowerCase();
+          }
+          
+          // Otherwise return the highest confidence email
+          const sortedEmails = data.data.emails.sort((a, b) => b.confidence - a.confidence);
+          return sortedEmails[0].value.toLowerCase();
         }
       }
     }
+
+    // Try email finder with company name
+    const cleanName = businessName.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, "");
+    const guessedDomain = `${cleanName}.com`;
+    
+    const finderResponse = await fetch(
+      `https://api.hunter.io/v2/email-finder?domain=${encodeURIComponent(guessedDomain)}&first_name=info&api_key=${hunterApiKey}`,
+      { headers: { "Accept": "application/json" } }
+    );
+
+    if (finderResponse.ok) {
+      const data: HunterEmailResult = await finderResponse.json();
+      if (data.data?.email && data.data.score > 50) {
+        return data.data.email.toLowerCase();
+      }
+    }
+
     return null;
   } catch (error) {
-    console.error("Error extracting email:", error);
+    console.error("Error finding email with Hunter:", error);
     return null;
   }
 }
 
-// Generate business email guesses based on common patterns
-function generateEmailGuesses(businessName: string, city: string): string {
-  // Clean business name for email generation
+// Fallback: Generate business email guesses based on common patterns
+function generateEmailGuess(businessName: string): string {
   const cleanName = businessName
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, "")
     .substring(0, 20);
   
-  // Common patterns - we'll just generate a likely contact email format
-  // In production, you'd want to verify these
   const domain = `${cleanName}.com`;
   return `info@${domain}`;
 }
@@ -94,6 +130,10 @@ const handler = async (req: Request): Promise<Response> => {
     if (!yelpApiKey) {
       throw new Error("YELP_API_KEY not configured");
     }
+
+    const hunterApiKey = Deno.env.get("HUNTER_API_KEY");
+    const hunterEnabled = !!hunterApiKey;
+    console.log(`Hunter.io integration: ${hunterEnabled ? "enabled" : "disabled (will use email guesses)"}`);
 
     const { location, categories, limit = 50 }: DiscoveryRequest = await req.json();
     
@@ -135,25 +175,28 @@ const handler = async (req: Request): Promise<Response> => {
       console.log(`Found ${businesses.length} businesses for category: ${category}`);
 
       for (const business of businesses) {
-        // Filter businesses without websites (Yelp doesn't always have this info)
-        // We'll mark them for further verification
         const hasNoWebsite = !business.url || business.url.includes("yelp.com");
         
-        // Try to extract email from Yelp page or generate a guess
         let email: string | null = null;
-        
-        // Attempt to extract email from Yelp business page
-        if (business.url && !business.url.includes("yelp.com")) {
-          // If they have their own website, we'll try to find email during analysis
-          email = null;
-        } else if (business.url) {
-          // Try to extract from Yelp page
-          email = await extractEmailFromYelp(business.url);
+        let emailSource = "none";
+
+        // Try to find email using Hunter.io
+        if (hunterEnabled) {
+          // If business has its own website, search that domain
+          const businessDomain = !hasNoWebsite ? business.url : undefined;
+          email = await findEmailWithHunter(business.name, businessDomain);
+          
+          if (email) {
+            emailSource = "hunter";
+            console.log(`Found email via Hunter.io for ${business.name}: ${email}`);
+          }
         }
         
-        // If no email found and business has a phone, generate a guess
+        // Fallback to generated email guess if Hunter didn't find anything
         if (!email && business.display_phone) {
-          email = generateEmailGuesses(business.name, business.location?.city || "");
+          email = generateEmailGuess(business.name);
+          emailSource = "generated";
+          console.log(`Generated email guess for ${business.name}: ${email}`);
         }
         
         discoveredBusinesses.push({
@@ -163,6 +206,7 @@ const handler = async (req: Request): Promise<Response> => {
           state: business.location?.state || "",
           phone: business.display_phone || business.phone || null,
           email: email,
+          email_source: emailSource,
           source: "yelp",
           website_status: hasNoWebsite ? "none" : "outdated",
           score: hasNoWebsite ? 80 : 50,
@@ -179,15 +223,24 @@ const handler = async (req: Request): Promise<Response> => {
       return acc;
     }, new Map());
 
-    const results = Array.from(uniqueBusinesses.values());
+    const results = Array.from(uniqueBusinesses.values()) as any[];
+    const hunterEmails = results.filter((b: any) => b.email_source === "hunter").length;
+    const generatedEmails = results.filter((b: any) => b.email_source === "generated").length;
 
     console.log(`Total unique businesses discovered: ${results.length}`);
+    console.log(`Emails found via Hunter.io: ${hunterEmails}`);
+    console.log(`Generated email guesses: ${generatedEmails}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         businesses: results,
-        count: results.length 
+        count: results.length,
+        emailStats: {
+          hunterFound: hunterEmails,
+          generated: generatedEmails,
+          noEmail: results.length - hunterEmails - generatedEmails
+        }
       }),
       {
         status: 200,
