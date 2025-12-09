@@ -126,17 +126,25 @@ export default function LeadDetails() {
       return;
     }
 
+    if (!lead.email) {
+      toast({ title: "This lead has no email address", variant: "destructive" });
+      return;
+    }
+
     setIsSending(true);
     try {
-      const { error } = await supabase.functions.invoke("send-campaign-email", {
+      const { data, error } = await supabase.functions.invoke("send-campaign-email", {
         body: {
           lead_id: lead.id,
           template_id: selectedTemplate || null,
           user_id: user?.id,
+          custom_subject: emailSubject,
+          custom_content: emailContent,
         },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: "Email sent successfully" });
       setIsEmailDialogOpen(false);
@@ -144,6 +152,7 @@ export default function LeadDetails() {
       setEmailContent("");
       setSelectedTemplate("");
     } catch (err: any) {
+      console.error("Email send error:", err);
       toast({ title: "Failed to send email", description: err.message, variant: "destructive" });
     } finally {
       setIsSending(false);
