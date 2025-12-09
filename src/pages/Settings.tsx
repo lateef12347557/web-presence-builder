@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,60 @@ import {
   CreditCard,
   ExternalLink,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  Save
 } from "lucide-react";
+import { useProfile } from "@/hooks/useProfile";
+import { useDailySendLimits } from "@/hooks/useDailySendLimits";
 
 const Settings = () => {
+  const { profile, isLoading, updateProfile } = useProfile();
+  const { limits } = useDailySendLimits();
+  
+  // Profile form state
+  const [fullName, setFullName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [companyAddress, setCompanyAddress] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
+  const [senderName, setSenderName] = useState("");
+  
+  // Load profile data into form
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || "");
+      setCompanyName(profile.company_name || "");
+      setCompanyAddress(profile.company_address || "");
+      setSenderEmail(profile.sender_email || "");
+      setSenderName(profile.sender_name || "");
+    }
+  }, [profile]);
+
+  const handleSaveProfile = () => {
+    updateProfile.mutate({
+      full_name: fullName,
+      company_name: companyName,
+      company_address: companyAddress,
+    });
+  };
+
+  const handleSaveEmailSettings = () => {
+    updateProfile.mutate({
+      sender_email: senderEmail,
+      sender_name: senderName,
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -34,9 +85,9 @@ const Settings = () => {
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="email">Email Settings</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="billing">Billing</TabsTrigger>
           </TabsList>
 
           {/* Profile Tab */}
@@ -48,29 +99,29 @@ const Settings = () => {
                   Personal Information
                 </CardTitle>
                 <CardDescription>
-                  Update your personal details and contact information
+                  Update your personal details
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>First Name</Label>
-                    <Input defaultValue="John" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Last Name</Label>
-                    <Input defaultValue="Doe" />
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input type="email" defaultValue="john@agency.com" />
+                  <Label>Full Name</Label>
+                  <Input 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="John Doe"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
-                  <Input type="tel" defaultValue="(555) 123-4567" />
-                </div>
-                <Button>Save Changes</Button>
+                <Button 
+                  onClick={handleSaveProfile}
+                  disabled={updateProfile.isPending}
+                >
+                  {updateProfile.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
               </CardContent>
             </Card>
 
@@ -81,19 +132,145 @@ const Settings = () => {
                   Company Information
                 </CardTitle>
                 <CardDescription>
-                  Your company details for email sender identity
+                  Your company details for email sender identity (CAN-SPAM compliance)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Company Name</Label>
-                  <Input defaultValue="Web Agency Pro" />
+                  <Input 
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Your Company LLC"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Company Address</Label>
-                  <Input defaultValue="123 Main St, Austin, TX 78701" />
+                  <Input 
+                    value={companyAddress}
+                    onChange={(e) => setCompanyAddress(e.target.value)}
+                    placeholder="123 Main St, Austin, TX 78701"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required for CAN-SPAM compliance in outreach emails
+                  </p>
                 </div>
-                <Button>Save Changes</Button>
+                <Button 
+                  onClick={handleSaveProfile}
+                  disabled={updateProfile.isPending}
+                >
+                  {updateProfile.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Email Settings Tab */}
+          <TabsContent value="email" className="space-y-6">
+            <Card variant="elevated">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-primary" />
+                  SendGrid Sender Configuration
+                </CardTitle>
+                <CardDescription>
+                  Configure your verified sender email address for outreach campaigns
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-yellow-600">Important: Verify Your Sender</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Before sending emails, you must verify your sender identity in SendGrid. 
+                        Go to <a href="https://app.sendgrid.com/settings/sender_auth" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">SendGrid Sender Authentication</a> to verify your domain or create a Single Sender.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Sender Email Address</Label>
+                  <Input 
+                    type="email"
+                    value={senderEmail}
+                    onChange={(e) => setSenderEmail(e.target.value)}
+                    placeholder="outreach@yourdomain.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Must be a verified sender in your SendGrid account
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Sender Name</Label>
+                  <Input 
+                    value={senderName}
+                    onChange={(e) => setSenderName(e.target.value)}
+                    placeholder="Your Name or Company Name"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This name will appear in the "From" field of your emails
+                  </p>
+                </div>
+
+                <Button 
+                  onClick={handleSaveEmailSettings}
+                  disabled={updateProfile.isPending}
+                >
+                  {updateProfile.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Email Settings
+                </Button>
+
+                {senderEmail && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-600">
+                      Sender configured: {senderEmail}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="elevated">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  Sending Limits
+                </CardTitle>
+                <CardDescription>
+                  Your daily email sending limits
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                    <div>
+                      <p className="font-medium">Daily Limit</p>
+                      <p className="text-sm text-muted-foreground">Maximum emails per day</p>
+                    </div>
+                    <span className="text-2xl font-bold">{limits?.daily_limit || 100}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                    <div>
+                      <p className="font-medium">Sent Today</p>
+                      <p className="text-sm text-muted-foreground">Emails sent so far</p>
+                    </div>
+                    <span className="text-2xl font-bold">{limits?.sent_today || 0}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -107,41 +284,25 @@ const Settings = () => {
                   Email Provider
                 </CardTitle>
                 <CardDescription>
-                  Connect your email sending service for outreach campaigns
+                  Your connected email sending service
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  { name: "SendGrid", connected: true, description: "Recommended for high-volume sending" },
-                  { name: "Amazon SES", connected: false, description: "Cost-effective for large campaigns" },
-                  { name: "Postmark", connected: false, description: "Best deliverability rates" },
-                ].map((provider) => (
-                  <div 
-                    key={provider.name}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                        <Mail className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{provider.name}</p>
-                        <p className="text-sm text-muted-foreground">{provider.description}</p>
-                      </div>
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                      <Mail className="w-5 h-5" />
                     </div>
-                    {provider.connected ? (
-                      <Badge variant="success">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Connected
-                      </Badge>
-                    ) : (
-                      <Button variant="outline" size="sm">
-                        Connect
-                        <ExternalLink className="w-4 h-4 ml-2" />
-                      </Button>
-                    )}
+                    <div>
+                      <p className="font-medium">SendGrid</p>
+                      <p className="text-sm text-muted-foreground">High-volume email sending</p>
+                    </div>
                   </div>
-                ))}
+                  <Badge variant="success">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Connected
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
 
@@ -149,33 +310,42 @@ const Settings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Key className="w-5 h-5 text-primary" />
-                  API Keys
+                  API Integrations
                 </CardTitle>
                 <CardDescription>
-                  Manage API keys for data source integrations
+                  Connected data source APIs
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Google Places API Key</Label>
-                  <div className="flex gap-2">
-                    <Input type="password" defaultValue="••••••••••••••••" />
-                    <Button variant="outline">Update</Button>
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Yelp Fusion API</p>
+                      <p className="text-sm text-muted-foreground">Business discovery</p>
+                    </div>
                   </div>
+                  <Badge variant="success">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Connected
+                  </Badge>
                 </div>
-                <div className="space-y-2">
-                  <Label>Yelp Fusion API Key</Label>
-                  <div className="flex gap-2">
-                    <Input type="password" defaultValue="••••••••••••••••" />
-                    <Button variant="outline">Update</Button>
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Hunter.io</p>
+                      <p className="text-sm text-muted-foreground">Email discovery</p>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Twilio Account SID</Label>
-                  <div className="flex gap-2">
-                    <Input placeholder="Enter your Twilio SID" />
-                    <Button variant="outline">Save</Button>
-                  </div>
+                  <Badge variant="success">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Connected
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
@@ -212,78 +382,6 @@ const Settings = () => {
                     <Switch defaultChecked={notification.enabled} />
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Billing Tab */}
-          <TabsContent value="billing" className="space-y-6">
-            <Card variant="elevated">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-primary" />
-                  Current Plan
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20">
-                  <div>
-                    <Badge variant="info" className="mb-2">Professional</Badge>
-                    <p className="text-2xl font-bold">$149<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-                    <p className="text-sm text-muted-foreground mt-1">5,000 leads/month • 5 users</p>
-                  </div>
-                  <Button variant="outline">Upgrade Plan</Button>
-                </div>
-
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Leads used this month</span>
-                    <span className="font-medium">2,847 / 5,000</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Next billing date</span>
-                    <span className="font-medium">January 1, 2025</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Payment method</span>
-                    <span className="font-medium">•••• 4242</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card variant="elevated">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  Compliance Settings
-                </CardTitle>
-                <CardDescription>
-                  Configure CAN-SPAM and TCPA compliance options
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <p className="font-medium">Automatic Unsubscribe Link</p>
-                    <p className="text-sm text-muted-foreground">Add unsubscribe link to all emails</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <p className="font-medium">Suppression List Sync</p>
-                    <p className="text-sm text-muted-foreground">Automatically sync with global suppression list</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <p className="font-medium">Daily Sending Limit</p>
-                    <p className="text-sm text-muted-foreground">Maximum 500 emails per day</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
               </CardContent>
             </Card>
           </TabsContent>

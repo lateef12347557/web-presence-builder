@@ -108,10 +108,15 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", user_id)
       .maybeSingle();
 
-    // Determine from email - use verified SendGrid sender
-    // Users should configure their verified sender domain in SendGrid
-    const fromEmail = "noreply@yourdomain.com"; // Replace with your verified SendGrid sender
-    const fromName = profile?.company_name || profile?.full_name || "Website Services";
+    // Get sender email from profile or use fallback
+    const fromEmail = profile?.sender_email;
+    const fromName = profile?.sender_name || profile?.company_name || profile?.full_name || "Website Services";
+
+    if (!fromEmail) {
+      throw new Error("Sender email not configured. Please go to Settings → Email Settings to configure your verified SendGrid sender.");
+    }
+
+    console.log(`Using sender: ${fromName} <${fromEmail}>`);
 
     // Get template or use custom/default content
     let subject = custom_subject || "Grow Your Business with a Professional Website";
